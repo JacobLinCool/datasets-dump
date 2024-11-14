@@ -9,7 +9,7 @@ import hashlib
 
 
 def dump(
-    dataset: Union[str, Dataset],
+    dataset: Union[str, Dataset, DatasetDict],
     dist: str | Path,
     audio_column: Optional[str] = None,
     image_column: Optional[str] = None,
@@ -20,7 +20,7 @@ def dump(
     Dump a Hugging Face dataset's audio or images to a folder.
 
     Args:
-        dataset: Dataset name (str) or Dataset object
+        dataset: Dataset name (str), or Dataset/DatasetDict object
         dist: Destination folder path
         audio_column: Column name containing audio data
         image_column: Column name containing image data
