@@ -2,7 +2,7 @@
 name = "datasets-dump"
 version = "0.1.1"
 description = "A tool for dumping datasets from the Hugging Face datasets library"
-authors = [{ name = "Jacob Lim", email = "jacoblincool@gmail.com" }]
+authors = [{ name = "Jacob Lin", email = "jacoblincool@gmail.com" }]
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
