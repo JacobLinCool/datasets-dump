@@ -2,8 +2,9 @@ from typing import Literal, Optional, Union
 from pathlib import Path
 import json
 import csv
-from datasets import load_dataset, Dataset, DatasetDict
-from PIL.Image import Image
+import PIL.Image
+from datasets import load_dataset, Dataset, DatasetDict, Audio, Image, Video
+import PIL
 from tqdm import tqdm
 import hashlib
 
@@ -13,7 +14,9 @@ def dump(
     dist: str | Path,
     audio_column: Optional[str] = None,
     image_column: Optional[str] = None,
+    video_column: Optional[str] = None,
     metadata_format: Literal["jsonl", "csv"] = "jsonl",
+    audio_format: Optional[str] = None,
     image_format: Optional[str] = None,
 ) -> None:
     """
@@ -25,6 +28,7 @@ def dump(
         audio_column: Column name containing audio data
         image_column: Column name containing image data
         metadata_format: Format for metadata file ('jsonl' or 'csv')
+        audio_format: Output audio format (e.g., 'WAV', 'MP3', 'FLAC')
         image_format: Output image format (e.g., 'PNG', 'JPEG', 'WEBP').
                      If None, keeps original format when possible
     """
@@ -40,7 +44,9 @@ def dump(
                 dist=sub_dist,
                 audio_column=audio_column,
                 image_column=image_column,
+                video_column=video_column,
                 metadata_format=metadata_format,
+                audio_format=audio_format,
                 image_format=image_format,
             )
         return
@@ -48,18 +54,33 @@ def dump(
     if not isinstance(dataset, Dataset):
         raise ValueError("Dataset must be a string or Dataset object")
 
-    if not audio_column and not image_column:
+    print(dataset.features)
+
+    if not audio_column and not image_column and not video_column:
         # Try to guess audio or image column
         for col in dataset.column_names:
             if "audio" in col.lower():
                 audio_column = col
             elif "image" in col.lower():
                 image_column = col
-        if not audio_column and not image_column:
-            raise ValueError("Either audio_column or image_column must be specified")
+            elif "video" in col.lower():
+                video_column = col
+        if not audio_column and not image_column and not video_column:
+            raise ValueError(
+                "Either audio_column, image_column, or video_column is required"
+            )
 
-    if audio_column and image_column:
-        raise ValueError("Cannot specify both audio_column and image_column")
+    if audio_column and not isinstance(dataset.features[audio_column], Audio):
+        raise ValueError(f"Column '{audio_column}' is not an Audio feature")
+    if image_column and not isinstance(dataset.features[image_column], Image):
+        raise ValueError(f"Column '{image_column}' is not an Image feature")
+    if video_column and not isinstance(dataset.features[video_column], Video):
+        raise ValueError(f"Column '{video_column}' is not a Video feature")
+
+    media_features = []
+    for col in dataset.column_names:
+        if isinstance(dataset.features[col], (Audio, Image, Video)):
+            media_features.append(col)
 
     # Create destination directory
     dist_path = Path(dist)
@@ -81,11 +102,18 @@ def dump(
         # Process each item
         for item in tqdm(dataset, desc="Dumping files"):
             if audio_column:
-                item["file_name"] = process_audio(item, audio_column, dist_path)
-                remove_media_columns(item)
+                item["file_name"] = process_audio(
+                    item, audio_column, dist_path, audio_format
+                )
+            elif image_column:
+                item["file_name"] = process_image(
+                    item, image_column, dist_path, image_format
+                )
             else:
-                item["file_name"] = process_image(item, image_column, dist_path)
-                remove_media_columns(item)
+                item["file_name"] = process_video(item, video_column, dist_path)
+
+            for media_feature in media_features:
+                item.pop(media_feature)
 
             # Write metadata
             if metadata_format == "jsonl":
@@ -97,23 +125,23 @@ def dump(
     finally:
         metadata_fp.close()
 
-    # Validate image format if specified
-    if image_format and image_column:
-        image_format = image_format.upper()
-        if image_format not in Image.SAVE:
-            raise ValueError(f"Unsupported image format: {image_format}")
 
-
-def process_audio(item: dict, audio_column: str, dist_path: Path) -> str:
+def process_audio(
+    item: dict, audio_column: str, dist_path: Path, audio_format: Optional[str]
+) -> str:
     """Process and save audio file"""
     audio_data = item[audio_column]
     if isinstance(audio_data, dict):
         audio_path = audio_data.get("path")
         if audio_path:
             filename = Path(audio_path).name
+            if audio_format:
+                filename = filename.rsplit(".", 1)[0] + "." + audio_format.lower()
+            format = audio_format or filename.split(".")[-1].upper() or "WAV"
         else:
             item_hash = hashlib.md5(audio_data.get("array")).hexdigest()
-            filename = f"audio_{item_hash}.wav"
+            format = audio_format or "WAV"
+            filename = f"audio_{item_hash}.{format.lower()}"
 
         dest = dist_path / filename
         # Ensure no overwrite by adding number suffix if needed
@@ -133,17 +161,19 @@ def process_audio(item: dict, audio_column: str, dist_path: Path) -> str:
         if array is not None and sampling_rate is not None:
             import soundfile as sf
 
-            sf.write(str(dest), array, sampling_rate)
+            sf.write(str(dest), array, sampling_rate, format=format.lower())
 
         return filename
 
 
-def process_image(item: dict, image_column: str, dist_path: Path) -> str:
+def process_image(
+    item: dict, image_column: str, dist_path: Path, image_format: Optional[str]
+) -> str:
     """Process and save image file"""
     image_data = item[image_column]
-    if isinstance(image_data, Image):
+    if isinstance(image_data, PIL.Image.Image):
         item_hash = hashlib.md5(image_data.tobytes()).hexdigest()
-        format = image_data.format or "PNG"
+        format = image_format or image_data.format or "PNG"
         filename = f"image_{item_hash}.{format.lower()}"
         dest = dist_path / filename
 
@@ -164,17 +194,6 @@ def process_image(item: dict, image_column: str, dist_path: Path) -> str:
     return None
 
 
-def remove_media_columns(item: dict) -> None:
-    """Remove audio or image columns from item"""
-    pop_keys = []
-    for key in item.keys():
-        # check for audio object
-        if isinstance(item[key], dict):
-            if "array" in item[key] and "sampling_rate" in item[key]:
-                pop_keys.append(key)
-        # check for image object
-        elif isinstance(item[key], Image):
-            pop_keys.append(key)
-
-    for key in pop_keys:
-        item.pop(key)
+def process_video(item: dict, video_column: str, dist_path: Path) -> str:
+    """Process and save video file"""
+    raise NotImplementedError("Video extraction is not yet implemented")

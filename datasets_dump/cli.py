@@ -35,6 +35,12 @@ def main():
     )
 
     parser.add_argument(
+        "--audio-format",
+        help="Output audio format (e.g., WAV, MP3, FLAC)",
+        default=None,
+    )
+
+    parser.add_argument(
         "--image-format",
         help="Output image format (e.g., PNG, JPEG, WEBP)",
         choices=["PNG", "JPEG", "WEBP", "GIF", "BMP", "TIFF"],
@@ -49,6 +55,7 @@ def main():
         audio_column=args.audio_column,
         image_column=args.image_column,
         metadata_format=args.metadata_format,
+        audio_format=args.audio_format,
         image_format=args.image_format,
     )
 

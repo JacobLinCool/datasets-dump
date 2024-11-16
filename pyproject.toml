@@ -1,13 +1,13 @@
 [project]
 name = "datasets-dump"
-version = "0.1.1"
+version = "0.1.2"
 description = "A tool for dumping datasets from the Hugging Face datasets library"
 authors = [{ name = "Jacob Lin", email = "jacoblincool@gmail.com" }]
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["datasets"]
-dependencies = ["datasets", "tqdm", "Pillow", "soundfile", "numpy"]
+dependencies = ["datasets>=3.1.0", "tqdm", "Pillow", "soundfile", "numpy"]
 
 [project.urls]
 homepage = "https://github.com/JacobLinCool/datasets-dump"
