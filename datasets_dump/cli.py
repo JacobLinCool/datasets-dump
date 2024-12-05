@@ -1,4 +1,5 @@
 import argparse
+from datasets import load_dataset
 from .api import dump
 
 
@@ -15,6 +16,11 @@ def main():
     parser.add_argument(
         "dist",
         help="Destination folder path",
+    )
+
+    parser.add_argument(
+        "--config",
+        help="Dataset configuration",
     )
 
     parser.add_argument(
@@ -49,8 +55,10 @@ def main():
 
     args = parser.parse_args()
 
+    dataset = load_dataset(args.dataset, args.config)
+
     dump(
-        dataset=args.dataset,
+        dataset=dataset,
         dist=args.dist,
         audio_column=args.audio_column,
         image_column=args.image_column,

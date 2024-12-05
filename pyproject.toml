@@ -1,6 +1,6 @@
 [project]
 name = "datasets-dump"
-version = "0.1.2"
+version = "0.1.4"
 description = "A tool for dumping datasets from the Hugging Face datasets library"
 authors = [{ name = "Jacob Lin", email = "jacoblincool@gmail.com" }]
 license = "MIT"
